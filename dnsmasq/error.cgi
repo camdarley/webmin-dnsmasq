@@ -26,9 +26,18 @@ my $config_file = &read_file_lines( $config_filename );
 &ReadParse();
 
 my ($error_check_action, $error_check_result) = &check_for_file_errors( $0, $dnsmasq::text{"index_dns_settings"}, \%dnsmconfig );
-# if ($error_check_action eq "redirect") {
-#     &redirect ( $error_check_result );
-# }
+
+# Initialize error array if it doesn't exist or is undefined
+if (!exists $dnsmconfig{"error"} || !defined $dnsmconfig{"error"}) {
+    $dnsmconfig{"error"} = [];
+}
+
+# Get column headers
+my @error_fields = ( "configfield", "param", "file", "lineno", "desc" );
+my @column_headers = ( "" );
+foreach my $key ( @error_fields ) {
+    push ( @column_headers, $dnsmasq::text{"err_" . $key} );
+}
 
 &ui_print_header($dnsmasq::text{"configuration_errors_heading"}, $dnsmasq::text{"index_title"}, "", "intro", 1, 0, 0, &restart_button());
 print &header_js(\%dnsmconfig);
@@ -54,13 +63,6 @@ sub show_errors {
     }
     my @list_link_buttons = &list_links( "sel", 1 );
     print &ui_links_row(\@list_link_buttons);
-    my @error_fields = ( "configfield", "param", "file", "lineno", "desc" );
-    my @column_headers = ( "" );
-    foreach my $key ( @error_fields ) {
-        push ( @column_headers, $dnsmasq::text{"err_" . $key} );
-    }
-    push ( @column_headers, "" ); # for the buttons
-    # print &ui_columns_start( \@column_headers, );
     print &ui_columns_start( \@column_headers, 100, undef, undef, &ui_columns_header( [ $dnsmasq::text{"configuration_errors_heading"} ], [ 'class="table-title" colspan=' . @column_headers ] ), 1 );
     $count = 0;
     my @fs = ( "file", "path", "dir" );
@@ -127,7 +129,6 @@ sub show_ignored {
     my @list_link_buttons = &list_links( "sel", 1 );
     print &ui_links_row(\@list_link_buttons);
     my @ignored_fields = ( "file", "line" );
-    my @column_headers = ( "" );
     foreach my $key ( @ignored_fields ) {
         push ( @column_headers, $dnsmasq::text{"err_" . $key} );
     }

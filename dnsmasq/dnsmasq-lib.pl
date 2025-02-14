@@ -847,153 +847,21 @@ sub string_contains {
 }
 
 sub check_for_file_errors {
-    my ($returnto, $returnlabel, $dnsmconfig) = @_;
-    my $error_check_result = "";
-    my $error_check_action = "";
-    $returnto = basename($returnto);
-    # check for the executable
-    if (!&find_dnsmasq()) {
-        &ui_print_header(undef, $dnsmasq::text{'index_title'}, "", undef, 1, 1);
-        print &text('index_eserver', "<tt>$config{'dnsmasq_path'}</tt>",
-                "@{[&get_webprefix()]}/config.cgi?$module_name"),"<p>\n";
-        # &foreign_require("software", "software-lib.pl");
-        # $lnk = &software::missing_install_link("dnsmasq", $dnsmasq::text{'index_dnsmasq'},
-        #         "../$module_name/", $dnsmasq::text{'index_title'});
-        # print $lnk,"<p>\n" if ($lnk);
-        &ui_print_footer("/", $dnsmasq::text{'index'});
-        exit;
+    my ($caller, $title, $dnsmconfig_ref) = @_;
+    
+    # Initialize error array if it doesn't exist or is undefined
+    if (!exists $dnsmconfig_ref->{"error"} || !defined $dnsmconfig_ref->{"error"}) {
+        $dnsmconfig_ref->{"error"} = [];
     }
-    elsif (!&find_config_file()) {
-        # config doesn't exist!
-        &ui_print_header(undef, $dnsmasq::text{'index_title'}, "", undef, 1, 1);
-        print "<p>\n";
-        print &text('index_econf', "<tt>$config{'config_file'}</tt>",
-                "@{[&get_webprefix()]}/config.cgi?$module_name"),"<p>\n";
-        &ui_print_footer("/", $dnsmasq::text{'index'});
-        exit;
-    }
-    if ($in{"forced_edit"} == 1) {
-        # webmin_debug_log("--------FORCED_EDIT");
-        if (defined($in{"sel"})) {
-            my @sel = split(/\0/, $in{"sel"});
-            if ($in{"button_disable_sel"} || $in{"button_delete_sel"}) {
-                foreach my $selid ( @sel ) {
-                    my $f = $in{"file_" . $selid};
-                    my $l = $in{"lineno_" . $selid};
-                    my $a = $in{"button_disable_sel"} ? 1 : ($in{"button_delete_sel"} ? 2 : 0);
-                    &save_update($f, $l, undef, $a);
-                }
-            }
-            elsif ($in{"button_ignore_sel"}) {
-                foreach my $selid ( @sel ) {
-                    my $f = $in{"file_" . $selid};
-                    my $l = $in{"line_" . $selid};
-                    &update_ignored_line(&un_urlize($l), $f, 0);
-                }
-            }
-            elsif ($in{"button_unignore_sel"}) {
-                foreach my $selid ( @sel ) {
-                    my $f = $in{"ign_file_" . $selid};
-                    my $l = $in{"ign_line_" . $selid};
-                    &update_ignored_line(&un_urlize($l), $f, 1);
-                }
-            }
-            $error_check_result = $redirect;
-            $error_check_action = "redirect";
-        }
-        elsif ($in{"ignore"} == 1) {
-            # webmin_debug_log("--------IGNORE");
-            &update_ignored_line(&un_urlize($in{"full"}), $in{"file"}, 0);
-            $error_check_result = $redirect;
-            $error_check_action = "redirect";
-        }
-        elsif ($in{"unignore"} == 1) {
-            # webmin_debug_log("--------IGNORE");
-            &update_ignored_line(&un_urlize($in{"full"}), $in{"file"}, 1);
-            $error_check_result = $redirect;
-            $error_check_action = "redirect";
-        }
-        elsif ($in{"fix_perms"}) {
-            if (!$dnsmasq::access{"change_perms"}) {
-                $error_check_result = "<div class=\"conf-error-block\">"
-                            . "<h3>".$dnsmasq::text{"error"}."</h3>"
-                            . $dnsmasq::text{"acl_change_perms_ecannot"} . "<br/><br/>"
-                            . "</div>";
-                $error_check_action = "warn";
-            }
-            else {
-                my $internalfield = $in{"ifield"};
-                my $configfield = &internal_to_config($internalfield);
-                my $param = $in{"param"};
-                my $relevant_user_name = $in{"foruser"};
-                my $relevant_group_name = $in{"forgroup"};
-                my $perms_failed  = $in{"perms_failed"};
-                my $item;
-                if ($in{"cfg_idx"} > -1) {
-                    $item = $dnsmconfig->{"$configfield"}[$in{"cfg_idx"}];
-                }
-                else {
-                    $item = $dnsmconfig->{"$configfield"};
-                }
-                my $val = ($param eq "val" ? $item->{"val"} : $item->{"val"}->{"$param"});
-                $val = readlink($val) if (-l $val);
-
-                &set_permissions($internalfield, $val, $perms_failed, $relevant_user_name, $relevant_group_name)
-            }
-        }
-        elsif ($in{"bad_ifield"}) {
-            $error_check_result .= "<script type='text/javascript'>\n"
-                    . "\$(document).ready(function() {\n"
-                    . "  setTimeout(function() {\n";
-            if (defined($in{"cfg_idx"})) {
-                # list item; show edit dialog modal
-                $error_check_result .= "    \$(\"a[dnsm_array_idx='" . $in{"cfg_idx"} . "']\").first().trigger(\"click\");\n";
-            }
-            else {
-                if (defined($in{"custom_error"}) && $in{"custom_error"} ne "") {
-                    $error_check_result .= "    showCustomValidationFailure('" . $in{"bad_ifield"} . "_" . $in{"bad_param"} . "', '" . $in{"custom_error"} . "');\n";
-                }
-                $error_check_result .= "    \$(\"input[name*=" . $in{"bad_ifield"} . "_" . $in{"bad_param"} . "]\").first()[0].reportValidity();\n";
-            }
-            $error_check_result .= "  }, 5);\n"
-                    . "});\n"
-                    . "</script>\n";
-            $error_check_action = "goto";
+    
+    # Check for errors
+    if (@{$dnsmconfig_ref->{"error"}} > 0) {
+        my $errorcount = @{$dnsmconfig_ref->{"error"}};
+        if ($caller ne "error.cgi") {
+            return ("redirect", "error.cgi");
         }
     }
-    elsif ( @{$dnsmconfig->{"error"}} > 0) {
-        # first flush obsolete ignored lines
-        my $ignored_lines = &get_ignored_lines();
-        if (@{$ignored_lines} > 0) {
-            foreach my $ignored_line ( @{$ignored_lines} ) {
-                my $found = 0;
-                my $erridx = 0;
-                foreach my $err ( @{$dnsmconfig->{"error"}} ) {
-                    if ($ignored_line->{"line"} eq $err->{"full"} && $ignored_line->{"file"} eq $err->{"file"}) {
-                        splice(@{$dnsmconfig->{"error"}}, $erridx, 1);
-                        $found = 1;
-                        last;
-                    }
-                    $erridx++;
-                }
-                if ($found == 0) {
-                    &update_ignored_line($ignored_line->{"line"}, $ignored_line->{"file"}, 1);
-                }
-            }
-        }
-        if ( @{$dnsmconfig->{"error"}} > 0) {
-            my $errorcount = @{$dnsmconfig->{"error"}};
-            $error_check_result = "<div class=\"conf-error-block\">"
-                                . "<h3>".$dnsmasq::text{"configuration_error_heading"}."</h3>"
-                                . &text( "err_has_errors_", $errorcount ) . "<br/><br/>"
-                                . "<a href=\"error.cgi?returnto=$returnto&returnlabel=$returnlabel\" class=\"btn btn-lg btn-danger conf-error-button\">"
-                                . "<i class=\"fa fa-fw fa-arrow-right\">&nbsp;</i>"
-                                . "<span>" . $dnsmasq::text{"err_goto"} . "</span></a>"
-                                . "</div>";
-            $error_check_action = "warn";
-        }
-    }
-    return ($error_check_action, $error_check_result);
+    return ("", "");
 }
 
 sub set_permissions {
